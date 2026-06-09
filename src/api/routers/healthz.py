@@ -1,7 +1,10 @@
 from fastapi import APIRouter
 
+from api.schemas.healthz.healthz import HealthzResponse
+
 router = APIRouter()
 
-@router.get("/healthz", status_code=200)
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+
+@router.get("/healthz", response_model=HealthzResponse, status_code=200)
+def healthz() -> HealthzResponse:
+    return HealthzResponse(status="ok")
