@@ -1,7 +1,5 @@
 from fastapi import APIRouter
-
 from api.schemas.chat.chat import ChatRequest, ChatResponse
-
 from services.chat.chat import llm_call
 
 router = APIRouter()

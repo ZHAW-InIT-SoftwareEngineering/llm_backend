@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from api.routers import chat, healthz
 
-app = FastAPI(title="LLM - DemoObject")
+llm_backend = FastAPI(title="LLM Backend - DemoObject")
 
-app.include_router(chat.router)
-app.include_router(healthz.router)
+llm_backend.include_router(chat.router)
+llm_backend.include_router(healthz.router)
