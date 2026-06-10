@@ -6,7 +6,6 @@ on:
       - main 
   workflow_dispatch:
 
-# DO WE NEED THIS?
 concurrency:
   group: llm_backend-stack-deploy
   cancel-in-progress: true
@@ -20,10 +19,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Configure GHCR image
         id: image
@@ -34,14 +33,14 @@ jobs:
           echo "llm_backend_image=ghcr.io/${ghcr_namespace}/llm-backend" >> "${GITHUB_OUTPUT}"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push backend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -69,7 +68,7 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure GHCR image namespace
         shell: bash
@@ -142,6 +141,36 @@ jobs:
             set -euo pipefail
             docker version
             docker compose version
+          '
+
+      - name: Validate NVIDIA container runtime on VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "${HOME}/.ssh/demoobject_deploy_key" -o StrictHostKeyChecking=yes "${VM_USER}@${VM_HOST}" '
+            set -euo pipefail
+
+            if ! nvidia-smi >/dev/null; then
+              echo "nvidia-smi failed on the VM. Install or repair the NVIDIA host driver first." >&2
+              exit 1
+            fi
+
+            if ! docker info --format "{{json .Runtimes}}" | grep -q "\"nvidia\""; then
+              cat >&2 <<'"'"'MSG'"'"'
+          Docker can see the host daemon, but the NVIDIA container runtime is not configured.
+          Host nvidia-smi only proves the VM driver works; GPU containers also need
+          nvidia-container-toolkit and Docker runtime configuration.
+
+          If nvidia-ctk is missing, install nvidia-container-toolkit first.
+          Then configure the runtime and restart Docker:
+            sudo nvidia-ctk runtime configure --runtime=docker
+            sudo systemctl restart docker
+
+          Then verify:
+            docker info --format "{{json .Runtimes}}"
+          MSG
+              exit 1
+            fi
           '
 
       - name: Prepare compose file on VM
