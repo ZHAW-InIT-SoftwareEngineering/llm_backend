@@ -195,8 +195,12 @@ jobs:
           DEPLOY_PATH=$(printf '%q' "${DEPLOY_PATH}")
           HF_TOKEN=$(printf '%q' "${HF_TOKEN}")
 
+          export DOCKER_CONFIG
+          DOCKER_CONFIG="\$(mktemp -d)"
+
           cleanup() {
             docker logout ghcr.io >/dev/null 2>&1 || true
+            rm -rf "\${DOCKER_CONFIG}"
           }
           trap cleanup EXIT
 
@@ -210,13 +214,13 @@ jobs:
           docker compose -f "\${DEPLOY_PATH}/docker-compose.prod.yaml" pull sglang api 
           docker compose -f "\${DEPLOY_PATH}/docker-compose.prod.yaml" up -d --remove-orphans sglang api
 
-          for i in \$(seq 1 30); do
+          for i in \$(seq 1 180); do
             sglang_status=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' sglang 2>/dev/null || true)
             api_status=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' llm-backend-api 2>/dev/null || true)
             if [ "\${sglang_status}" = "healthy" ] && [ "\${api_status}" = "healthy" ]; then
               exit 0
             fi
-            sleep 2
+            sleep 5
           done
 
           echo "SGLang and/or API container did not become healthy in time." >&2
