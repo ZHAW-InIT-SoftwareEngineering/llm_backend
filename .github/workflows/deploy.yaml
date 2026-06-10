@@ -246,7 +246,7 @@ jobs:
             exit 1
           fi
 
-          https_headers=$(curl -I --connect-timeout 10 --retry 10 --retry-delay 3 https://llm-backend.cloudlab.zhaw.ch/healthz 2>&1 || true)
+          https_headers=$(curl -sS -D - -o /dev/null --connect-timeout 10 --retry 10 --retry-delay 3 https://llm-backend.cloudlab.zhaw.ch/healthz 2>&1 || true)
           echo "$https_headers"
           if ! printf '%s\n' "$https_headers" | grep -Eq 'HTTP/[0-9.]+ 200|HTTP/[0-9.]+ 304'; then
             echo "HTTPS endpoint is not reachable successfully." >&2
