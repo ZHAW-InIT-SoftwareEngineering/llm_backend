@@ -13,7 +13,7 @@ WORKDIR /llm_backend
 RUN uv sync --locked
 
 # start the fastpi
-CMD ["uv", "run", "fastapi", "run", "src/main.py", "--port", "8000"]
+CMD ["uv", "run", "fastapi", "run", "src/main.py", "--host", "0.0.0.0", "--port", "8000"]
 
 # and something additionally:
-# for all the AI haters: I (!!) wrote the comments NOT AI ;) - may I still use comments 
+# for all the AI haters: I (!!) wrote the comments NOT AI ;) - may I still use comments? 

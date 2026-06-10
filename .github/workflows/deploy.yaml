@@ -1,0 +1,221 @@
+name: LLM Backend - Deploy Stack 
+
+on: 
+  push: 
+    branches: 
+      - main 
+  workflow_dispatch:
+
+# DO WE NEED THIS?
+concurrency:
+  group: llm_backend-stack-deploy
+  cancel-in-progress: true
+
+jobs: 
+  build_and_push_llm_backend: 
+    name: Build and Push LLM-Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure GHCR image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          ghcr_namespace="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "llm_backend_image=ghcr.io/${ghcr_namespace}/llm-backend" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.llm_backend_image }}:${{ github.sha }}
+          provenance: false
+          sbom: false
+
+  deploy_stack:
+    name: Deploy LLM-Backend Stack to VM
+    runs-on: ubuntu-latest
+    needs:
+      - build_and_push_llm_backend
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VM_HOST: ${{ vars.VM_HOST }}
+      VM_USER: ${{ vars.VM_USER || 'ubuntu' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || './llm_backend' }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      GHCR_LOGIN_USERNAME: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure GHCR image namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          ghcr_namespace="${GITHUB_REPOSITORY_OWNER,,}"
+          {
+            echo "LLM_BACKEND_IMAGE=ghcr.io/${ghcr_namespace}/llm-backend"
+          } >> "${GITHUB_ENV}"
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_vars=(
+            VM_HOST
+            VM_USER
+            DEPLOY_PATH
+          )
+
+          required_runtime_values=(
+            LLM_BACKEND_IMAGE
+            GHCR_LOGIN_USERNAME
+            GHCR_TOKEN
+          )
+
+          required_secrets=(
+            SSH_PRIVATE_KEY
+            HF_TOKEN
+          )
+
+          for key in "${required_vars[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required GitHub Variable: ${key}" >&2
+              exit 1
+            fi
+          done
+
+          for key in "${required_runtime_values[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required workflow runtime value: ${key}" >&2
+              exit 1
+            fi
+          done
+
+          for key in "${required_secrets[@]}"; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing required GitHub Secret: ${key}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH access to VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/.ssh"
+          chmod 700 "${HOME}/.ssh"
+          printf '%s\n' "${SSH_PRIVATE_KEY}" > "${HOME}/.ssh/demoobject_deploy_key"
+          chmod 600 "${HOME}/.ssh/demoobject_deploy_key"
+          ssh-keyscan -H "${VM_HOST}" >> "${HOME}/.ssh/known_hosts"
+          chmod 644 "${HOME}/.ssh/known_hosts"
+
+      - name: Validate Docker availability on VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "${HOME}/.ssh/demoobject_deploy_key" -o StrictHostKeyChecking=yes "${VM_USER}@${VM_HOST}" '
+            set -euo pipefail
+            docker version
+            docker compose version
+          '
+
+      - name: Prepare compose file on VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "${HOME}/.ssh/demoobject_deploy_key" -o StrictHostKeyChecking=yes "${VM_USER}@${VM_HOST}" "set -euo pipefail; mkdir -p $(printf '%q' "${DEPLOY_PATH}")"
+          ssh -i "${HOME}/.ssh/demoobject_deploy_key" -o StrictHostKeyChecking=yes "${VM_USER}@${VM_HOST}" "set -euo pipefail; cat > $(printf '%q' "${DEPLOY_PATH}/docker-compose.prod.yaml")" < deploy/docker-compose.prod.yaml
+
+      - name: Deploy sglang and api services on VM
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -i "${HOME}/.ssh/demoobject_deploy_key" -o StrictHostKeyChecking=yes "${VM_USER}@${VM_HOST}" 'bash -s' <<EOF
+          set -euo pipefail
+          LLM_BACKEND_IMAGE=$(printf '%q' "${LLM_BACKEND_IMAGE}")
+          IMAGE_TAG=$(printf '%q' "${IMAGE_TAG}")
+          GHCR_LOGIN_USERNAME=$(printf '%q' "${GHCR_LOGIN_USERNAME}")
+          GHCR_TOKEN=$(printf '%q' "${GHCR_TOKEN}")
+          DEPLOY_PATH=$(printf '%q' "${DEPLOY_PATH}")
+          HF_TOKEN=$(printf '%q' "${HF_TOKEN}")
+
+          cleanup() {
+            docker logout ghcr.io >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          export LLM_BACKEND_IMAGE
+          export IMAGE_TAG
+          export HF_TOKEN
+
+          echo "\${GHCR_TOKEN}" | docker login ghcr.io --username "\${GHCR_LOGIN_USERNAME}" --password-stdin
+
+          docker network inspect edge >/dev/null 2>&1 || docker network create edge
+          docker compose -f "\${DEPLOY_PATH}/docker-compose.prod.yaml" pull sglang api 
+          docker compose -f "\${DEPLOY_PATH}/docker-compose.prod.yaml" up -d --remove-orphans sglang api
+
+          for i in \$(seq 1 30); do
+            sglang_status=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' sglang 2>/dev/null || true)
+            api_status=\$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' llm-backend-api 2>/dev/null || true)
+            if [ "\${sglang_status}" = "healthy" ] && [ "\${api_status}" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "SGLang and/or API container did not become healthy in time." >&2
+          docker ps >&2
+          docker logs --tail 100 sglang >&2 || true
+          docker logs --tail 100 llm-backend-api >&2 || true
+          exit 1
+          EOF
+          
+      - name: Validate public HTTPS reachability through shared edge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          http_headers=$(curl -I --connect-timeout 10 --retry 10 --retry-delay 3 http://llm-backend.cloudlab.zhaw.ch/healthz 2>&1 || true)
+          echo "$http_headers"
+          if ! printf '%s\n' "$http_headers" | grep -Eq 'HTTP/[0-9.]+ 30[128]'; then
+            echo "HTTP endpoint did not return a redirect." >&2
+            exit 1
+          fi
+          if ! printf '%s\n' "$http_headers" | grep -qi '^location: https://llm-backend\.cloudlab\.zhaw\.ch'; then
+            echo "HTTP endpoint did not redirect to HTTPS." >&2
+            exit 1
+          fi
+
+          https_headers=$(curl -I --connect-timeout 10 --retry 10 --retry-delay 3 https://llm-backend.cloudlab.zhaw.ch/healthz 2>&1 || true)
+          echo "$https_headers"
+          if ! printf '%s\n' "$https_headers" | grep -Eq 'HTTP/[0-9.]+ 200|HTTP/[0-9.]+ 304'; then
+            echo "HTTPS endpoint is not reachable successfully." >&2
+            exit 1
+          fi
