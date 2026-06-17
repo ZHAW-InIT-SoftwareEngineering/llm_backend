@@ -1,9 +1,5 @@
 import requests
-
-
-SGLANG_URL = "http://host.docker.internal:30000/v1/chat/completions"
-MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
-LLM_UNAVAILABLE_MESSAGE = "GPU is stopped to protect our cluster. Please try again later."
+from config.llm import SYSTEM_PROMPT, SGLANG_URL, MODEL, LLM_UNAVAILABLE_MESSAGE
 
 
 def call_llm(user_message: str) -> str:
@@ -13,6 +9,7 @@ def call_llm(user_message: str) -> str:
             json={
                 "model": MODEL,
                 "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
                 "temperature": 0.7,
