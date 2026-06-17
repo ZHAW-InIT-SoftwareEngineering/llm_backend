@@ -240,7 +240,7 @@ Send a chat message:
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"user_message":"Explain FastAPI in one sentence."}'
+  -d '{"userMessage":"Explain FastAPI in one sentence."}'
 ```
 
 Response shape:

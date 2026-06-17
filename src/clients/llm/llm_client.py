@@ -2,7 +2,7 @@ import requests
 from config.llm import SYSTEM_PROMPT, SGLANG_URL, MODEL, LLM_UNAVAILABLE_MESSAGE
 
 
-def call_llm(user_message: str) -> str:
+def call_llm(userMessage: str) -> str:
     try:
         response = requests.post(
             SGLANG_URL,
@@ -10,7 +10,7 @@ def call_llm(user_message: str) -> str:
                 "model": MODEL,
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
+                    {"role": "user", "content": userMessage},
                 ],
                 "temperature": 0.5,
                 "max_tokens": 512,
