@@ -167,6 +167,11 @@ docker logs -f sglang
 nvidia-smi
 ```
 
+If the VM needs NVIDIA drivers installed or repaired manually, use Ubuntu's
+server documentation:
+
+- [Install NVIDIA drivers on Ubuntu Server](https://ubuntu.com/server/docs/how-to/graphics/install-nvidia-drivers/)
+
 ## Deployment Path And Takedown
 
 The GitHub Actions deploy workflow supports a `DEPLOY_PATH` repository variable,
