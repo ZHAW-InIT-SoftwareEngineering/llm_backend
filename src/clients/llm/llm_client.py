@@ -12,7 +12,7 @@ def call_llm(user_message: str) -> str:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
-                "temperature": 0.7,
+                "temperature": 0.5,
                 "max_tokens": 512,
             },
             timeout=60,
