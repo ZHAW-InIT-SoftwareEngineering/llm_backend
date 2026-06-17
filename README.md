@@ -115,6 +115,58 @@ Start it with:
 docker compose -f deploy/docker-compose.prod.yaml up -d
 ```
 
+## Manual Model Switch On The VM
+
+The model must match in both places:
+
+- `deploy/docker-compose.prod.yaml`, in the `sglang` `--model-path` command
+- `src/config/llm.py`, in the `MODEL` constant
+
+After changing the model and redeploying, SGLang downloads model files into the
+VM user's Hugging Face cache:
+
+```text
+~/.cache/huggingface
+```
+
+If a larger model runs the VM out of disk space, stop `sglang` and remove the
+failed or old model cache before retrying:
+
+```bash
+export LLM_BACKEND_IMAGE=dummy
+export IMAGE_TAG=dummy
+export HF_TOKEN=dummy
+
+docker compose -f "$HOME/llm_backend/docker-compose.prod.yaml" stop sglang
+
+rm -rf "$HOME/.cache/huggingface/hub/models--Qwen--Qwen3-8B"
+rm -rf "$HOME/.cache/huggingface/hub/.locks/models--Qwen--Qwen3-8B"
+
+df -h /
+du -sh "$HOME/.cache/huggingface" 2>/dev/null || true
+```
+
+Recommended fallback order for the current L4 VM:
+
+```text
+Qwen/Qwen3-8B
+Qwen/Qwen2.5-7B-Instruct
+Qwen/Qwen2.5-3B-Instruct
+```
+
+`Qwen/Qwen3-8B` is the preferred larger trial. If it fails because there is no
+space left on the VM, use `Qwen/Qwen2.5-7B-Instruct`. If that also does not fit,
+use `Qwen/Qwen2.5-3B-Instruct`.
+
+Useful checks while retrying:
+
+```bash
+df -h /
+du -sh "$HOME/.cache/huggingface" 2>/dev/null || true
+docker logs -f sglang
+nvidia-smi
+```
+
 ## Deployment Path And Takedown
 
 The GitHub Actions deploy workflow supports a `DEPLOY_PATH` repository variable,

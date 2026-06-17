@@ -1,6 +1,6 @@
 SGLANG_URL = "http://host.docker.internal:30000/v1/chat/completions"
 
-MODEL = "Qwen/Qwen3-8B"
+MODEL = " Qwen/Qwen2.5-7B-Instruct"
 
 LLM_UNAVAILABLE_MESSAGE = "GPU is stopped to protect our cluster. Please try again later."
 

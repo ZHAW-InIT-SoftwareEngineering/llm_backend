@@ -14,7 +14,7 @@ services:
       # if you use modelscope to download model, you need set this environment
       # - SGLANG_USE_MODELSCOPE=true
     entrypoint: python3 -m sglang.launch_server
-    command: --model-path Qwen/Qwen3-8B
+    command: --model-path  Qwen/Qwen2.5-7B-Instruct
       --host 0.0.0.0
       --port 30000
     ulimits:
