@@ -78,6 +78,9 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Stress test output
+stress_results/
+
 # IPython
 profile_default/
 ipython_config.py

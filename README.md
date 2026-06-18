@@ -8,6 +8,7 @@ The API has two routes:
 - `GET /healthz` returns a basic service health response.
 - `POST /chat` forwards a user message to the configured LLM and returns the
   assistant answer.
+- `POST /chat/stream` streams the assistant answer as server-sent events.
 
 ## Requirements
 
@@ -43,6 +44,10 @@ The current client is configured in `src/clients/llm/llm_client.py` with:
 |   |   `-- llm/
 |   `-- services/
 |       `-- chat/
+|-- tests/
+|   |-- evaluation/
+|   |   `-- notebooks/
+|   `-- stress_tests/
 `-- uv.lock
 ```
 
@@ -250,6 +255,70 @@ Response shape:
   "llm_answer": "..."
 }
 ```
+
+Stream a chat message:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"userMessage":"Explain FastAPI in one sentence."}'
+```
+
+Response shape:
+
+```text
+data: {"delta": "..."}
+
+data: [DONE]
+```
+
+## Stress Testing `/chat/stream`
+
+The repository includes a black-box stress test for the streaming chat endpoint.
+It sends concurrent `POST /chat/stream` requests, consumes each full stream, and
+writes latency, throughput, and failure data to `stress_results/`.
+
+The stress test targets the deployed VM by default:
+
+```text
+https://llm-backend.cloudlab.zhaw.ch/chat/stream
+```
+
+The default profile runs `30`, `60`, and `100` concurrent users, which can
+overload the API, the SGLang server, or the GPU.
+
+Run the default stress test:
+
+```bash
+uv run python -m tests.stress_tests.chat_stream_load
+```
+
+Run a small smoke test:
+
+```bash
+uv run python -m tests.stress_tests.chat_stream_load \
+  --concurrency-levels 1 2 \
+  --requests-per-user 1
+```
+
+Run against another host, for example a local development server:
+
+```bash
+uv run python -m tests.stress_tests.chat_stream_load \
+  --base-url http://127.0.0.1:8000 \
+  --concurrency-levels 30 60 100 \
+  --requests-per-user 1
+```
+
+The stress test writes:
+
+- `stress_results/chat_stream_results.csv`: one row per request
+- `stress_results/chat_stream_summary.json`: grouped latency and failure summary
+
+Open `tests/evaluation/notebooks/chat_stream_stress_analysis.ipynb` after a run
+to generate self-contained graphs for latency distributions, p50/p90/p95/p99
+latency, time-to-first-byte, success/failure rate, error categories, and
+throughput over time.
 
 ## Development Notes
 
