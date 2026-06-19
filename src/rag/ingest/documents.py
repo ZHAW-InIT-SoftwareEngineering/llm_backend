@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
 
 
 def create_documents(path: Path) -> list[Document]:
@@ -26,15 +25,6 @@ def create_documents(path: Path) -> list[Document]:
         for block in data["blocks"]
         if block.get("html")
     ]
-
-
-def create_embeddings(
-    model_name: str = "sentence-transformers/all-mpnet-base-v2",
-) -> HuggingFaceEmbeddings:
-    return HuggingFaceEmbeddings(
-        model_name=model_name,
-        encode_kwargs={"normalize_embeddings": True},
-    )
 
 
 def main(paths: list) -> None:
