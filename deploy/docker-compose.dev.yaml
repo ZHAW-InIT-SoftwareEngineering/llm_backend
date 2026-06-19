@@ -1,0 +1,47 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    networks:
+      - local
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: llm-backend:dev
+    container_name: llm-backend-api
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant
+    networks:
+      - local
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      SGLANG_URL: http://host.docker.internal:30000/v1/chat/completions
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "uv run python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()\" || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  qdrant_data:
+
+networks:
+  local:

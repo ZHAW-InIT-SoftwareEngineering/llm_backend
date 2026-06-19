@@ -10,7 +10,8 @@ ENV UV_NO_DEV=1
 
 # Sync the project into a new environment, asserting the lockfile is up to date
 WORKDIR /llm_backend
-RUN uv sync --locked
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev
 
 # start the fastpi
 CMD ["uv", "run", "fastapi", "run", "src/main.py", "--host", "0.0.0.0", "--port", "8000"]

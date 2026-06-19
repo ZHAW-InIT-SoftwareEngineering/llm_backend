@@ -5,6 +5,8 @@ from collections.abc import Iterator
 
 
 def call_llm(userMessage: str) -> str:
+    return userMessage
+    '''
     try:
         response = requests.post(
             SGLANG_URL,
@@ -27,6 +29,7 @@ def call_llm(userMessage: str) -> str:
         return LLM_UNAVAILABLE_MESSAGE
 
     return llm_answer
+    '''
 
 
 def stream_call_llm(userMessage: str) -> Iterator[str]:
