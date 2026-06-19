@@ -11,8 +11,13 @@ def create_documents(path: Path) -> list[Document]:
     with path.open(encoding="utf-8") as f:
         data: dict[str, Any] = json.load(f)
 
-    return [
-        Document(
+    documents = []
+
+    for block in data["blocks"]:
+        if not block.get("html"):
+            continue
+
+        document = Document(
             page_content=block["html"],
             metadata={
                 "source": str(path),
@@ -22,21 +27,22 @@ def create_documents(path: Path) -> list[Document]:
                 "section_hierarchy": block.get("section_hierarchy"),
             },
         )
-        for block in data["blocks"]
-        if block.get("html")
-    ]
+
+        documents.append(document)
+
+    return documents
 
 
-def main(paths: list) -> None:
-    for path in paths: 
-        create_documents(path)
+def main(paths: list[Path]) -> None:
+    for path in paths:
+        documents = create_documents(path)
+        print(f"Created {len(documents)} documents from {path}")
 
 
 if __name__ == "__main__":
-    PDF_PATHS = [
+    CHUNK_PATHS = [
         Path("docs/rag/chunks/shortest_paths_theory_notes.chunks.json"),
-        Path("docs/rag/chunks/domain_specific_language_theory.chunks.json"),
+        # Path("docs/rag/chunks/domain_specific_language_theory.chunks.json"),
     ]
-    
-    main(PDF_PATHS)
-    
+
+    main(CHUNK_PATHS)
